@@ -1,0 +1,82 @@
+---
+- hosts: pis
+  gather_facts: yes
+  become: true
+
+  vars_files:
+    - vars.yml
+
+  vars_prompt:
+
+    - name: "pi_password"
+      prompt: "new password"
+      private: no
+      encrypt: "sha512_crypt"
+
+  tasks:
+
+    - name: install package(s)
+      apt:
+        name: "{{ packages }}"
+        state: latest
+      vars:
+        packages:
+          - vim
+          - git
+    
+    - name: place ssh key
+      authorized_key:
+        user: pi
+        state: present
+        key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
+
+    - name: set mac address variable
+      set_fact:
+        host_mac_address: "{{ hostvars[inventory_hostname].ansible_default_ipv4.macaddress }}"
+    
+    - name: set hostname and ip variables
+      set_fact:
+        hostname: "{{ mac_address_mapping[host_mac_address].name }}"
+        ip_address: "{{ mac_address_mapping[host_mac_address].ip }}"
+
+    - name: update hostname
+      template:
+        src: "templates/{{ item.template }}"
+        dest: "{{ item.dest }}"
+        mode: 0644
+      with_items:
+        - { template: hostname.j2, dest: /etc/hostname }
+        - { template: hosts.j2, dest: /etc/hosts }
+    
+    # - name: assign static ip address
+    #   template: 
+    #     src: "templates/{{ item.template }}"
+    #     dest: "{{ item.dest }}"
+    #     mode: 0644
+    #   with_items:
+    #     - { template: dhcpcd.conf.j2, dest: /etc/dhcpcd.conf }
+
+    - name: update password 
+      become: yes
+      user:
+        name: "pi"
+        password: "{{ pi_password }}"
+
+    - name: reboot
+      shell: "sleep 5 && reboot"
+      async: 1
+      poll: 0
+
+    - name: reconnect
+      wait_for_connection:
+        connect_timeout: 20
+        sleep: 5
+        delay: 5
+        timeout: 300
+
+    - name: install and configure docker
+      shell: "{{ item }}"
+      with_items:
+        - "curl -sSL get.docker.com | sh"
+        - "usermod pi -aG docker"
+

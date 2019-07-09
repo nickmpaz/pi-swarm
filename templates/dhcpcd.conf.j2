@@ -1,0 +1,11 @@
+
+interface {{ ansible_default_ipv4.interface }}
+arping  {{ ansible_default_ipv4.gateway }}
+
+profile {{ ansible_default_ipv4.gateway }}
+static ip_address={{ ip_address }}/24
+static routers= {{ ansible_default_ipv4.gateway }}
+static domain_name_servers= {{ ansible_default_ipv4.gateway }} 8.8.8.8
+
+
+
